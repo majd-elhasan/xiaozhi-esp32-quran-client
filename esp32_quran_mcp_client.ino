@@ -215,7 +215,27 @@ void registerMcpTools() {
     }
   );
 
+    // Alias that defaults to continue mode so agents can keep playing through the surah
   mcpClient.registerTool(
+    "play_continue",
+    "Play from an ayah through the rest of the surah, then auto-advance",
+    "{\"properties\":{\"surah\":{\"type\":\"integer\"},\"ayah\":{\"type\":\"integer\"}},\"required\":[\"surah\",\"ayah\"],\"title\":\"playContinueArguments\",\"type\":\"object\"}",
+    [](const String &args) {
+      DynamicJsonDocument doc(256);
+      DeserializationError error = deserializeJson(doc, args);
+      if (error) {
+        return WebSocketMCP::ToolResponse("{\"success\":false,\"error\":\"Invalid JSON\"}", true);
+      }
+      int surah = doc["surah"];
+      int ayah = doc["ayah"];
+      if (!startAyahPlayback(surah, ayah, true)) {
+        return WebSocketMCP::ToolResponse("{\"success\":false,\"error\":\"Ayah file not found\"}", true);
+      }
+      String response = "{\"success\":true,\"surah\":" + String(surah) + ",\"ayah\":" + String(ayah) + ",\"mode\":\"continue\"}";
+      return WebSocketMCP::ToolResponse(response);
+    }
+  );
+mcpClient.registerTool(
     "stop_playback",
     "Stop Quran playback",
     "{\"properties\":{},\"title\":\"stopPlaybackArguments\",\"type\":\"object\"}",
@@ -502,3 +522,4 @@ int findNextSurahWithAyahs(int currentSurah) {
   }
   return 0;
 }
+

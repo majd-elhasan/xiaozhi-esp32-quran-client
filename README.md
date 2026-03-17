@@ -41,3 +41,9 @@ The updated sketch acts as a Quran player that can be driven over MCP or via the
   * `stop_playback` â€” immediately cancels playback.
 
 Because the CLI now compiles locally and the extension knows where `arduino-cli` lives, you can continue using the Verify/Upload buttons once VS Code is restarted. The helper script keeps the required JSON dependency installed alongside `ESP8266Audio`.
+## MCP tools (AI commands)
+- play_ayah: { surah, ayah, mode: stop|continue } – default stop.
+- play_continue: { surah, ayah } – shorthand that always continues through the surah and auto-advances.
+- stop_playback: {} – stop immediately.
+
+These mirror the serial commands (play stop, play continue, stop, status, help). If you add new serial commands later, consider exposing them as MCP tools the same way: add another mcpClient.registerTool in egisterMcpTools() with a JSON schema and a lambda that calls your handler.
