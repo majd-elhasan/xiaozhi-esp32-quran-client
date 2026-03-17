@@ -57,6 +57,11 @@ struct PlaybackState {
   bool active = false;
 } playback;
 
+// Surah repeat control
+bool repeatSurahMode = false;
+int repeatSurahId = 0;
+int repeatSurahRemaining = 0;  // additional runs after the current one
+
 // ---------- Function declarations ----------
 void setupWifi();
 void registerMcpTools();
@@ -77,6 +82,8 @@ int findFirstAyahInSurah(int surah);
 int findNextSurahWithAyahs(int currentSurah);
 bool ensureAyahExists(int surah, int ayah);
 void playbackTask(void *pvParameters);
+void startSurahRepeat(int surah, int times);
+
 
 void setup() {
   DEBUG_SERIAL.begin(DEBUG_BAUD_RATE);
@@ -235,8 +242,47 @@ void registerMcpTools() {
       return WebSocketMCP::ToolResponse(response);
     }
   );
-mcpClient.registerTool(
-    "stop_playback",
+  // Play an entire surah starting from its first available ayah and auto-advance afterward
+  mcpClient.registerTool(
+    "play_surah",
+    "Play a whole surah (starts at the first available ayah and continues)",
+    "{\"properties\":{\"surah\":{\"type\":\"integer\"}},\"required\":[\"surah\"],\"title\":\"playSurahArguments\",\"type\":\"object\"}",
+    [](const String &args) {
+      DynamicJsonDocument doc(128);
+      DeserializationError error = deserializeJson(doc, args);
+      if (error) {
+        return WebSocketMCP::ToolResponse("{\"success\":false,\"error\":\"Invalid JSON\"}", true);
+      }
+      int surah = doc["surah"];
+      int firstAyah = findFirstAyahInSurah(surah);
+      if (firstAyah == 0) {
+        return WebSocketMCP::ToolResponse("{\"success\":false,\"error\":\"Surah files not found\"}", true);
+      }
+      if (!startAyahPlayback(surah, firstAyah, true)) {
+        return WebSocketMCP::ToolResponse("{\"success\":false,\"error\":\"Failed to start playback\"}", true);
+      }
+      String response = "{\"success\":true,\"surah\":" + String(surah) + ",\"ayah\":" + String(firstAyah) + ",\"mode\":\"continue\"}";
+      return WebSocketMCP::ToolResponse(response);
+    }
+  );
+  mcpClient.registerTool(
+    "repeat_surah",
+    "Play a surah multiple times (continues through each run, then stops)",
+    "{\"properties\":{\"surah\":{\"type\":\"integer\"},\"times\":{\"type\":\"integer\"}},\"required\":[\"surah\",\"times\"],\"title\":\"repeatSurahArguments\",\"type\":\"object\"}",
+    [](const String &args) {
+      DynamicJsonDocument doc(256);
+      DeserializationError error = deserializeJson(doc, args);
+      if (error) {
+        return WebSocketMCP::ToolResponse("{\"success\":false,\"error\":\"Invalid JSON\"}", true);
+      }
+      int surah = doc["surah"];
+      int times = doc["times"];
+      if (times < 1) times = 1;
+      startSurahRepeat(surah, times);
+      return WebSocketMCP::ToolResponse("{\"success\":true,\"surah\":" + String(surah) + ",\"times\":" + String(times) + "}");
+    }
+  );
+,
     "Stop Quran playback",
     "{\"properties\":{},\"title\":\"stopPlaybackArguments\",\"type\":\"object\"}",
     [](const String &args) {
@@ -416,6 +462,14 @@ bool ensureAyahExists(int surah, int ayah) {
   return found;
 }
 
+void startSurahRepeat(int surah, int times) {
+  int firstAyah = findFirstAyahInSurah(surah);
+  if (firstAyah == 0) return;
+  repeatSurahMode = true;
+  repeatSurahId = surah;
+  repeatSurahRemaining = times - 1;
+  startAyahPlayback(surah, firstAyah, true);
+}
 bool startAyahPlayback(int surah, int ayah, bool continueMode) {
   if (!ensureAyahExists(surah, ayah)) {
     // DEBUG_SERIAL.printf("[Quran] Ayah %03d:%03d not available\n", surah, ayah);
@@ -443,7 +497,9 @@ void stopPlayback() {
   playback.waitingForNextSurah = false;
   playback.waitUntil = 0;
   playback.autoAdvance = false;
-
+  repeatSurahMode = false;
+  repeatSurahRemaining = 0;
+  repeatSurahId = 0;
   if (mp3->isRunning()) {
     mp3->stop();
   }
@@ -483,6 +539,24 @@ void updateAutoSurahAdvance() {
   if (millis() < playback.waitUntil) return;
 
   playback.waitingForNextSurah = false;
+
+  // Handle surah repeats first
+  if (repeatSurahMode) {
+    if (repeatSurahRemaining > 0) {
+      repeatSurahRemaining--;
+      int firstAyah = findFirstAyahInSurah(repeatSurahId);
+      if (firstAyah > 0) {
+        startAyahPlayback(repeatSurahId, firstAyah, true);
+        return;
+      }
+    }
+    // Either no repeats left or missing files; exit repeat mode
+    repeatSurahMode = false;
+    repeatSurahId = 0;
+    repeatSurahRemaining = 0;
+    return;
+  }
+
   int nextSurah = findNextSurahWithAyahs(playback.surah);
   if (nextSurah == 0) {
     DEBUG_SERIAL.println("[Quran] No additional Surahs with audio files");
@@ -522,4 +596,12 @@ int findNextSurahWithAyahs(int currentSurah) {
   }
   return 0;
 }
+
+
+
+
+
+
+
+
 

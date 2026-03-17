@@ -47,3 +47,5 @@ Because the CLI now compiles locally and the extension knows where `arduino-cli`
 - stop_playback: {} – stop immediately.
 
 These mirror the serial commands (play stop, play continue, stop, status, help). If you add new serial commands later, consider exposing them as MCP tools the same way: add another mcpClient.registerTool in egisterMcpTools() with a JSON schema and a lambda that calls your handler.
+- play_surah: { surah } – starts at the first available ayah of the surah, continues to the end, then auto-advances.
+- repeat_surah: { surah, times } – repeats the entire surah 'times' times in continue mode, then stops.\n
