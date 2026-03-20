@@ -39,6 +39,11 @@ void InputEngine::backspace() {
     }
 }
 
+void InputEngine::setCallbacks(PlayCallback play, StopCallback stop) {
+    playCb = play;
+    stopCb = stop;
+}
+
 void InputEngine::handle(RemoteButton btn) {
 
     Serial.print("BTN: ");
@@ -68,6 +73,7 @@ void InputEngine::handle(RemoteButton btn) {
 
     // ---------- STAR ----------
     if (btn == BTN_STAR) {
+        if (stopCb) stopCb();
         reset();
         state = ENTER_SURAH;
         Serial.println("Enter Surah");
@@ -113,6 +119,8 @@ void InputEngine::handle(RemoteButton btn) {
             Serial.print(surah);
             Serial.print(" A:");
             Serial.println(a);
+
+            if (playCb) playCb(surah, a);
         }
         reset();
     }

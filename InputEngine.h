@@ -3,9 +3,13 @@
 
 #include "IRController.h"
 
+typedef void (*PlayCallback)(int surah, int ayah);
+typedef void (*StopCallback)();
+
 class InputEngine {
 public:
     void handle(RemoteButton btn);
+    void setCallbacks(PlayCallback play, StopCallback stop);
 
 private:
     enum State {
@@ -27,6 +31,9 @@ private:
     // hash multi-press
     uint8_t hashCount = 0;
     unsigned long lastHash = 0;
+
+    PlayCallback playCb = nullptr;
+    StopCallback stopCb = nullptr;
 
     void reset();
     void addDigit(int d);
