@@ -688,6 +688,9 @@ bool startAyahPlayback(int surah, int ayah, bool continueMode, bool allowBasmala
 }
 
 void stopPlayback(bool resetRepeat, bool resetBasmala) {
+  // Pause audio task to avoid race with mp3->loop on the other core
+  if (playbackTaskHandle) vTaskSuspend(playbackTaskHandle);
+
   playback.active = false;
   playback.waitingForNextSurah = false;
   playback.waitUntil = 0;
@@ -707,6 +710,8 @@ void stopPlayback(bool resetRepeat, bool resetBasmala) {
   }
   if (mp3->isRunning()) mp3->stop();
   if (audioFile) { delete audioFile; audioFile = nullptr; }
+
+  if (playbackTaskHandle) vTaskResume(playbackTaskHandle);
 }
 
 void handlePlaybackCompletion() {
