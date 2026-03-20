@@ -13,6 +13,7 @@ public:
   void begin(const char* defaultSsid, const char* defaultPass, int buttonPin = 0);
   void loop();                  // call every loop(); handles button and web UI
   bool inApMode() const { return apMode; }
+  void forceApMode();           // enter AP mode programmatically (e.g., remote hash x7)
 
 private:
   void startApConfigMode();

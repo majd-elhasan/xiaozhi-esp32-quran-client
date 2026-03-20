@@ -13,15 +13,17 @@ void InputEngine::reset() {
 void InputEngine::addDigit(int d) {
 
     if (state == ENTER_SURAH) {
+        if (surah == 0 && d == 0) return; // avoid leading zero
         int temp = surah * 10 + d;
-        if (temp <= 114) {
+        if (temp >= 1 && temp <= 114) {
             surah = temp;
             surahSet = true;
         }
     }
     else if (state == ENTER_AYAH) {
+        if (ayah == 0 && d == 0) return; // avoid leading zero
         int temp = ayah * 10 + d;
-        if (temp <= 286) {
+        if (temp >= 1 && temp <= 286) {
             ayah = temp;
             ayahSet = true;
         }
@@ -44,6 +46,10 @@ void InputEngine::setCallbacks(PlayCallback play, StopCallback stop) {
     stopCb = stop;
 }
 
+void InputEngine::setApCallback(ApModeCallback ap) {
+    apCb = ap;
+}
+
 void InputEngine::handle(RemoteButton btn) {
 
     Serial.print("BTN: ");
@@ -58,6 +64,7 @@ void InputEngine::handle(RemoteButton btn) {
 
         if (hashCount >= 7) {
             Serial.println(">>> AP MODE <<<");
+            if (apCb) apCb();
             hashCount = 0;
             return;
         }
@@ -112,8 +119,15 @@ void InputEngine::handle(RemoteButton btn) {
 
     // ---------- OK ----------
     if (btn == BTN_OK) {
-        if (surahSet) {
-            int a = ayahSet ? ayah : 1;
+        // If no digits entered, treat double OK as stop/toggle
+        if (!surahSet) {
+            if (stopCb) stopCb();
+            reset();
+            return;
+        }
+
+        if (surahSet && surah > 0) {
+            int a = (ayahSet && ayah > 0) ? ayah : 1;
 
             Serial.print("PLAY S:");
             Serial.print(surah);

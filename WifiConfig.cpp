@@ -32,6 +32,10 @@ void WifiConfigurator::loop() {
   checkButton();
 }
 
+void WifiConfigurator::forceApMode() {
+  if (!apMode) startApConfigMode();
+}
+
 void WifiConfigurator::checkButton() {
   int state = digitalRead(buttonPin);
   if (state == LOW) {

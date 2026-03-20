@@ -5,11 +5,13 @@
 
 typedef void (*PlayCallback)(int surah, int ayah);
 typedef void (*StopCallback)();
+typedef void (*ApModeCallback)();
 
 class InputEngine {
 public:
     void handle(RemoteButton btn);
     void setCallbacks(PlayCallback play, StopCallback stop);
+    void setApCallback(ApModeCallback ap);
 
 private:
     enum State {
@@ -34,6 +36,7 @@ private:
 
     PlayCallback playCb = nullptr;
     StopCallback stopCb = nullptr;
+    ApModeCallback apCb = nullptr;
 
     void reset();
     void addDigit(int d);
