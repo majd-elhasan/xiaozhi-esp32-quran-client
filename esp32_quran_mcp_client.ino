@@ -8,6 +8,7 @@
 #include <AudioGeneratorMP3.h>
 #include <AudioOutputI2S.h>
 #include "WifiConfig.h"
+#include "IRRemote.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -142,6 +143,8 @@ void setup() {
   out->SetPinout(I2S_BCLK, I2S_LRC, I2S_DIN);
   out->SetGain(0.5);
 
+  irRemoteBegin();
+
   wifiCfg.begin(WIFI_SSID, WIFI_PASS, WIFI_CFG_BUTTON);
   if (!mcpClient.begin(MCP_ENDPOINT, onMcpConnectionChange)) {
     DEBUG_SERIAL.println("[MCP] Initialization failed");
@@ -156,6 +159,7 @@ void setup() {
 
 void loop() {
   wifiCfg.loop();
+  irRemoteLoop();
   if (!sdInitialized) {
     static unsigned long lastSdRetryMs = 0;
     const uint32_t RETRY_INTERVAL_MS = 2000;
