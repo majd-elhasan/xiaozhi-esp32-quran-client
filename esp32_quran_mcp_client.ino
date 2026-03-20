@@ -7,6 +7,7 @@
 #include <AudioFileSourceSD.h>
 #include <AudioGeneratorMP3.h>
 #include <AudioOutputI2S.h>
+#include "WifiConfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -20,6 +21,9 @@ static const int SD_MOSI = 23;
 static const int I2S_BCLK = 14;
 static const int I2S_LRC  = 27;
 static const int I2S_DIN  = 33;
+
+// ---------- Config button ----------
+static const int WIFI_CFG_BUTTON = 22;  // hold ~7s to enter AP config
 
 // ---------- WiFi + MCP ----------
 static const char* WIFI_SSID = "Mylove";
@@ -46,10 +50,13 @@ AudioGeneratorMP3 *mp3 = new AudioGeneratorMP3();
 AudioFileSourceSD *audioFile = nullptr;
 AudioOutputI2S *out = new AudioOutputI2S();
 TaskHandle_t playbackTaskHandle = nullptr;
+WifiConfigurator wifiCfg;
 
 WebSocketMCP mcpClient;
 bool wifiConnected = false;
 bool mcpConnected = false;
+
+bool sdInitialized = false;
 
 struct PlaybackState {
   int surah = 0;
@@ -95,7 +102,7 @@ String buildAyahPath(int surah, int ayah);
 bool isValidSurah(int surah);
 bool isValidAyah(int ayah);
 bool startAyahPlayback(int surah, int ayah, bool continueMode, bool allowBasmala = true);
-void stopPlayback(bool resetRepeat = true, bool resetBasmala = true);
+void stopPlayback(bool resetRepeat, bool resetBasmala);
 void handlePlaybackCompletion();
 void updateAutoSurahAdvance();
 int findFirstAyahInSurah(int surah);
@@ -106,10 +113,6 @@ void startSurahRepeat(int surah, int times);
 bool playAyahRange(int surah, int startAyah, int endAyah, bool continueAfterRange);
 bool playAyahCount(int surah, int startAyah, int count, bool continueAfterRange);
 void stopCurrentForNewCommand();
-bool playAyahRange(int surah, int startAyah, int endAyah, bool continueAfterRange);
-bool playAyahCount(int surah, int startAyah, int count, bool continueAfterRange);
-bool playAyahRange(int surah, int startAyah, int endAyah, bool continueAfterRange);
-bool playAyahCount(int surah, int startAyah, int count, bool continueAfterRange);
 
 
 void setup() {
@@ -122,19 +125,24 @@ void setup() {
   SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   // Try faster SD clock to reduce gaps; fall back if the card can't handle it.
   const uint32_t SD_FAST_HZ = 20000000;  // 20 MHz
-  const uint32_t SD_SAFE_HZ = 3000000;   // 4 MHz
+  const uint32_t SD_SAFE_HZ = 4000000;   // 4 MHz
   if (!SD.begin(SD_CS, SPI, SD_FAST_HZ)) {
     DEBUG_SERIAL.println("SD init failed at 20 MHz, retrying at 4 MHz...");
     if (!SD.begin(SD_CS, SPI, SD_SAFE_HZ)) {
       DEBUG_SERIAL.println("SD init failed");
-      while (1);
+    }else {
+      sdInitialized = true;
+      DEBUG_SERIAL.println("SD initialized at 4 MHz");
     }
+  }else {
+    sdInitialized = true;
+    DEBUG_SERIAL.println("SD initialized at 20 MHz");
   }
 
   out->SetPinout(I2S_BCLK, I2S_LRC, I2S_DIN);
   out->SetGain(0.5);
 
-  setupWifi();
+  wifiCfg.begin(WIFI_SSID, WIFI_PASS, WIFI_CFG_BUTTON);
   if (!mcpClient.begin(MCP_ENDPOINT, onMcpConnectionChange)) {
     DEBUG_SERIAL.println("[MCP] Initialization failed");
   }
@@ -147,10 +155,34 @@ void setup() {
 }
 
 void loop() {
+  wifiCfg.loop();
+  if (!sdInitialized) {
+    static unsigned long lastSdRetryMs = 0;
+    const uint32_t RETRY_INTERVAL_MS = 2000;
+    if (millis() - lastSdRetryMs >= RETRY_INTERVAL_MS) {
+      lastSdRetryMs = millis();
+      const uint32_t SD_FAST_HZ = 20000000;  // 20 MHz
+      const uint32_t SD_SAFE_HZ = 4000000;   // 4 MHz
+      if (SD.begin(SD_CS, SPI, SD_FAST_HZ)) {
+        sdInitialized = true;
+        DEBUG_SERIAL.println("SD initialized at 20 MHz (retry)");
+      } else if (SD.begin(SD_CS, SPI, SD_SAFE_HZ)) {
+        sdInitialized = true;
+        DEBUG_SERIAL.println("SD initialized at 4 MHz (retry)");
+      } else {
+        DEBUG_SERIAL.println("SD init retry failed");
+      }
+    }
+  }
+
+  if (wifiCfg.inApMode()) return;  // keep config portal responsive
+
   mcpClient.loop();
 
   updateAutoSurahAdvance();
   processSerialCommands();
+
+  wifiConnected = (WiFi.status() == WL_CONNECTED);
 
   if (!wifiConnected) {
     blinkLed(1, 100);
@@ -355,7 +387,7 @@ void registerMcpTools() {
     "Stop Quran playback",
     "{\"properties\":{},\"title\":\"stopPlaybackArguments\",\"type\":\"object\"}",
     [](const String &args) {
-      stopPlayback(true);
+      stopPlayback(true, true);
       return WebSocketMCP::ToolResponse("{\"success\":true}");
     }
   );
