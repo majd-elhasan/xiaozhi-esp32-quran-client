@@ -105,6 +105,7 @@ void playbackTask(void *pvParameters);
 void startSurahRepeat(int surah, int times);
 bool playAyahRange(int surah, int startAyah, int endAyah, bool continueAfterRange);
 bool playAyahCount(int surah, int startAyah, int count, bool continueAfterRange);
+void stopCurrentForNewCommand();
 bool playAyahRange(int surah, int startAyah, int endAyah, bool continueAfterRange);
 bool playAyahCount(int surah, int startAyah, int count, bool continueAfterRange);
 bool playAyahRange(int surah, int startAyah, int endAyah, bool continueAfterRange);
@@ -246,6 +247,7 @@ void registerMcpTools() {
       bool continueMode = mode.equalsIgnoreCase("continue");
 
       // Mirror serial command behavior: allow basmala when in continue mode
+      stopCurrentForNewCommand();
       clearRangeLimits();
       if (!startAyahPlayback(surah, ayah, continueMode, continueMode)) {
         return WebSocketMCP::ToolResponse("{\"success\":false,\"error\":\"Ayah file not found\"}", true);
@@ -272,6 +274,7 @@ void registerMcpTools() {
       int endAyah = doc["endAyah"];
       String mode = doc.containsKey("mode") ? doc["mode"].as<String>() : "stop";
       bool contAfter = mode.equalsIgnoreCase("continue");
+      stopCurrentForNewCommand();
       clearRangeLimits();
       if (!playAyahRange(surah, startAyah, endAyah, contAfter)) {
         return WebSocketMCP::ToolResponse("{\"success\":false,\"error\":\"Invalid range or files missing\"}", true);
@@ -297,6 +300,7 @@ void registerMcpTools() {
       int count = doc["count"];
       String mode = doc.containsKey("mode") ? doc["mode"].as<String>() : "stop";
       bool contAfter = mode.equalsIgnoreCase("continue");
+      stopCurrentForNewCommand();
       clearRangeLimits();
       if (!playAyahCount(surah, startAyah, count, contAfter)) {
         return WebSocketMCP::ToolResponse("{\"success\":false,\"error\":\"Invalid range or files missing\"}", true);
@@ -396,6 +400,7 @@ void handleSerialCommand(const String &command) {
 
   // play_ayah <surah> <ayah> [stop]
   if (cmd.startsWith("play_ayah ")) {
+    stopCurrentForNewCommand();
     clearRangeLimits();
     String parts = cmd.substring(strlen("play_ayah ")); parts.trim();
     int s = -1, a = -1; String mode = "continue"; // default continue
@@ -416,6 +421,7 @@ void handleSerialCommand(const String &command) {
 
   // play_range <surah> <startAyah> <endAyah> [continue]
   if (cmd.startsWith("play_range ")) {
+    stopCurrentForNewCommand();
     String parts = cmd.substring(strlen("play_range ")); parts.trim();
     int sp1 = parts.indexOf(' ');
     int sp2 = (sp1 >= 0) ? parts.indexOf(' ', sp1 + 1) : -1;
@@ -434,6 +440,7 @@ void handleSerialCommand(const String &command) {
 
   // play_after <surah> <startAyah> <count> [continue]
   if (cmd.startsWith("play_after ")) {
+    stopCurrentForNewCommand();
     String parts = cmd.substring(strlen("play_after ")); parts.trim();
     int sp1 = parts.indexOf(' ');
     int sp2 = (sp1 >= 0) ? parts.indexOf(' ', sp1 + 1) : -1;
@@ -452,6 +459,7 @@ void handleSerialCommand(const String &command) {
 
   // play_surah <surah>
   if (cmd.startsWith("play_surah ")) {
+    stopCurrentForNewCommand();
     clearRangeLimits();
     int s = cmd.substring(strlen("play_surah ")).toInt();
     int first = findFirstAyahInSurah(s);
@@ -463,6 +471,7 @@ void handleSerialCommand(const String &command) {
 
   // repeat_surah <surah> <times>
   if (cmd.startsWith("repeat_surah ")) {
+    stopCurrentForNewCommand();
     clearRangeLimits();
     String parts = cmd.substring(strlen("repeat_surah ")); parts.trim();
     int sp = parts.indexOf(' ');
@@ -570,6 +579,11 @@ void startSurahRepeat(int surah, int times) {
   repeatSurahId = surah;
   repeatSurahRemaining = times -1;  // first play is already started
   startAyahPlayback(surah, firstAyah, true);
+}
+
+// Stop any current playback cleanly before starting a new command
+void stopCurrentForNewCommand() {
+  stopPlayback(true, true);   // reset repeat/basmala/range
 }
 
 // Play a range within a surah, optionally continuing after the range ends
