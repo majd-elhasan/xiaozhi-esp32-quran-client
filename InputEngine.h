@@ -33,6 +33,9 @@ private:
     // hash multi-press
     uint8_t hashCount = 0;
     unsigned long lastHash = 0;
+    // ok multi-press
+    uint8_t okCount = 0;
+    unsigned long lastOk = 0;
 
     PlayCallback playCb = nullptr;
     StopCallback stopCb = nullptr;

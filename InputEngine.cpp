@@ -119,9 +119,15 @@ void InputEngine::handle(RemoteButton btn) {
 
     // ---------- OK ----------
     if (btn == BTN_OK) {
-        // If no digits entered, treat double OK as stop/toggle
-        if (!surahSet) {
+        if (millis() - lastOk > 1500) okCount = 0;
+
+        okCount++;
+        lastOk = millis();
+
+        if (okCount >= 3) {
+            Serial.println(">>> stop playback <<<");
             if (stopCb) stopCb();
+            okCount = 0;
             reset();
             return;
         }
@@ -136,7 +142,6 @@ void InputEngine::handle(RemoteButton btn) {
 
             if (playCb) playCb(surah, a);
         }
-        reset();
     }
 }
 
